@@ -15,7 +15,8 @@ import { KITS } from '../audio/kits';
 import { MediaSessionController } from '../audio/media-session';
 import { BrainClient } from '../sim/client';
 import {
-  CYCLE_ORDER, OUTPUT_CIRCUITS, STIMULI, buildChannels, resolveTypes, stimulusForBar,
+  CYCLE_ORDER, OUTPUT_CIRCUITS, POKES, READOUTS, STIMULI,
+  buildChannels, resolveTypes, stimulusForBar,
 } from '../sim/circuits';
 import type { Backend, Channel, ConnectomeMeta } from '../sim/types';
 
@@ -24,6 +25,8 @@ export type Telemetry = {
   chord: string;
   /** The circuit actually driven this bar, which the cycle preset rotates. */
   stimulus: string;
+  /** Sensory event fired into this bar, if any. */
+  poke: string | null;
   realtime: number;
   awake: number;
   spikes: number;
@@ -67,6 +70,11 @@ export function useConductor(baseUrl: string, onActivity: (a: Uint8Array) => voi
   const channels = useRef<Channel[]>([]);
   const running = useRef(false);
   const queue = useRef<{ at: number; frame: Uint8Array }[]>([]);
+  // A poke is consumed by whichever bar is simulated next, so it always lands
+  // on a bar line. That is a musical choice as much as a practical one.
+  // Held for two bars: one bar of response is easy to miss, two is unmistakable.
+  const pending = useRef<{ key: string; bars: number } | null>(null);
+  const [queued, setQueued] = useState<string | null>(null);
   // Live controls read inside the async bar loop.
   const live = useRef({ bpm, brainMsPerBar, intensity, stimulusKey, rateHz, duty, moodIndex, cycle, cycleBars, kitIndex });
   useEffect(() => { live.current = { bpm, brainMsPerBar, intensity, stimulusKey, rateHz, duty, moodIndex, cycle, cycleBars, kitIndex }; },
@@ -142,15 +150,31 @@ export function useConductor(baseUrl: string, onActivity: (a: Uint8Array) => voi
       const mood = MOODS[moodIndex] ?? MOODS[0];
       const barSeconds = (60 / bpm) * BEATS;
 
-      // Stay at most ~1.5 bars ahead so control changes are felt quickly.
-      if (nextBar > 0 && nextBar - engine.currentTime > barSeconds * 1.5) {
+      // Stay just over one bar ahead. The lookahead is what a poke has to wait
+      // out — at 1.5 bars a click could miss two bars and take ~8 seconds to be
+      // heard. A bar costs ~35% of its own length to simulate, so 1.05 leaves
+      // ample margin and roughly halves that wait.
+      if (nextBar > 0 && nextBar - engine.currentTime > barSeconds * 1.05) {
         await new Promise(r => setTimeout(r, 40));
         continue;
       }
 
+      // The kernel drives one population per bar, so a poke is merged into the
+      // background set and the whole thing is driven harder for that bar.
+      const active = pending.current;
+      const poke = active?.key ?? null;
+      if (active) {
+        active.bars -= 1;
+        if (active.bars <= 0) { pending.current = null; setQueued(null); }
+      }
+      const pokeSpec = poke ? POKES.find(x => x.key === poke) : null;
+      const driven = pokeSpec && m
+        ? [...stimulusNeurons(activeStimulus), ...resolveTypes(m, pokeSpec.types)]
+        : stimulusNeurons(activeStimulus);
+
       const result = await c.simulate({
         durationMs: brainMsPerBar,
-        stimulus: [{ neurons: stimulusNeurons(activeStimulus), rateHz }],
+        stimulus: [{ neurons: driven, rateHz: pokeSpec ? Math.max(rateHz, 200) : rateHz }],
         dutyCycle: duty,
         channels: channels.current,
         maxEvents: 40000,
@@ -212,6 +236,7 @@ export function useConductor(baseUrl: string, onActivity: (a: Uint8Array) => voi
         bar, chord: chordName(bar, mood.progression), stimulus: activeStimulus, realtime: result.brainMs / Math.max(1, result.wallMs),
         awake: result.awakeNeurons, spikes: result.totalSpikes, notes: notes.length,
         channelRates: Array.from(result.channelRates), underruns, load, autoReduced,
+        poke,
       });
 
       media.current?.setMetadata(
@@ -227,6 +252,10 @@ export function useConductor(baseUrl: string, onActivity: (a: Uint8Array) => voi
   useEffect(() => { startRef.current = start; stopRef.current = stop; }, [start, stop]);
 
   const reset = useCallback(() => { client.current?.reset(); }, []);
+  const fire = useCallback((key: string) => {
+    pending.current = { key, bars: 2 };
+    setQueued(key);
+  }, []);
   const audioSuspended = () => !!audio.current && audio.current.context.state !== 'running';
 
   return {
@@ -236,7 +265,8 @@ export function useConductor(baseUrl: string, onActivity: (a: Uint8Array) => voi
     cycle, setCycle, cycleBars, setCycleBars, cycleOrder: CYCLE_ORDER,
     kitIndex, setKitIndex, kits: KITS,
     stimulusKey, setStimulusKey, rateHz, setRateHz,
-    circuits: OUTPUT_CIRCUITS, stimuli: STIMULI,
+    circuits: OUTPUT_CIRCUITS, stimuli: STIMULI, pokes: POKES, readouts: READOUTS,
+    fire, queued,
     voices: (KITS[kitIndex] ?? KITS[0]).voices,
   };
 }

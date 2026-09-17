@@ -28,3 +28,13 @@
 .health b {color:#e8cf95;font-weight:400;}
 .health-critical b {color:#ffc3b0;}
 .health span {color:#93a1b2;}
+
+.pokes {position:absolute;inset:auto 18px 45px;display:flex;flex-direction:column;gap:8px;}
+.pokes-title {font-size:10px;color:#cfe0ee;}
+.poke-row {display:flex;flex-wrap:wrap;gap:5px;}
+button.poke {min-height:27px;padding:5px 9px;font-size:10px;}
+button.poke[aria-pressed=true] {background:#2b3d4d;border-color:#84d7ef;color:#d7f3fb;}
+.readouts {display:flex;flex-direction:column;gap:5px;margin-top:2px;}
+.readout {display:grid;grid-template-columns:118px 1fr 46px;align-items:center;gap:9px;font-size:9px;color:#94a2b3;}
+.readout .meter i {background:linear-gradient(90deg,#8c5a1f,#ffcf7a);}
+@media(max-width:760px){.pokes{position:static;padding:10px 4px 0;}}

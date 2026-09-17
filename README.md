@@ -148,6 +148,26 @@ separately and every message carries its fix:
 - *A lost WebGL context* leaves a permanently black canvas unless handled; both
   scenes now block the default and recover on restore.
 
+**Poking the fly.** Six one-shot sensory events fire on top of whatever is
+driving, and four behavioural readouts show what the fly did rather than only
+what it sounded like. The one to listen for is *Threat*: LPLC2 is the looming
+detector, and stimulating it takes the giant fibre (DNp01) from silence to
+~50 Hz while halving the song circuit — pulse 76 to 27 Hz, TN1a 56 to 12.
+Escape overriding courtship is what a real fly does, and nothing here imposes
+it; it falls out of the wiring.
+
+Interactivity cost a scheduling change. Audio is scheduled ahead, and that
+lookahead is exactly what a poke has to wait out: at 1.5 bars a click could miss
+two bars and take ~8 seconds to be heard. A bar costs about 35% of its own
+length to simulate, so the lookahead is now 1.05 bars and a poke is held for two
+bars — measured latency 1.5 s, and still no underruns.
+
+Not everything survived the test. *Taste* is in the list but barely moves the
+proboscis motor neurons, because MaleCNS v1.0 does not carry the sugar-to-MN9
+feeding pathway that the FlyWire feeding demos use; `BM_Taste` is a
+mechanosensory bristle population, not a sugar chemoreceptor. It is kept and
+labelled honestly rather than quietly dropped.
+
 **Keys have to differ in pitch content, not just in name.** The first set
 offered A minor, C major and D dorian — which are the same seven white notes
 seen from three tonics. With no cadence to establish a tonic, switching between

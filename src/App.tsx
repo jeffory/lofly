@@ -61,10 +61,12 @@ export function App() {
   // (DLMn/DVMn) rate sets stroke amplitude, and the balance between the two
   // steering groups sets tilt. These are the same spike trains feeding the
   // hat, perc and pluck voices, so the fly beats in time with its own drums.
+  // Channels are voices first, then readouts, matching buildChannels().
+  const allChannels = [...c.circuits, ...c.readouts];
   const rateOf = (key: string) => {
-    const i = c.circuits.findIndex(x => x.key === key);
+    const i = allChannels.findIndex(x => x.key === key);
     if (i < 0 || !c.telemetry || !c.meta) return 0;
-    const size = resolveTypes(c.meta, c.circuits[i].types).length;
+    const size = resolveTypes(c.meta, allChannels[i].types).length;
     return size ? c.telemetry.channelRates[i] / size : 0;
   };
   const power = rateOf('power'), basal = rateOf('steer-basal'), fine = rateOf('steer-fine');
@@ -165,6 +167,34 @@ export function App() {
               <input type="range" min="60" max="1200" step="20" value={c.brainMsPerBar}
                      onChange={e => c.setBrainMsPerBar(Number(e.target.value))}/>
             </label>
+          </div>
+          <div className="pokes">
+            <span className="pokes-title">Poke the fly</span>
+            <div className="poke-row">
+              {c.pokes.map(p => <button key={p.key} className="poke"
+                                        disabled={!c.playing}
+                                        aria-pressed={c.queued === p.key}
+                                        title={p.note}
+                                        onClick={() => c.fire(p.key)}>{p.label}</button>)}
+            </div>
+            <p className="hint">
+              {c.queued
+                ? `${c.pokes.find(p => p.key === c.queued)?.label} fires on the next bar…`
+                : c.telemetry?.poke
+                  ? c.pokes.find(p => p.key === c.telemetry!.poke)?.note
+                  : c.playing ? 'A one-shot sensory event, on top of whatever is driving.'
+                              : 'Press Play first.'}
+            </p>
+            <div className="readouts">
+              {c.readouts.map(r => {
+                const hz = rateOf(r.key);
+                return <div key={r.key} className="readout" title={r.note}>
+                  <span>{r.label}</span>
+                  <span className="meter"><i style={{ width: `${Math.min(100, hz / 1.2)}%` }}/></span>
+                  <span className="voice-rate">{hz.toFixed(0)} Hz</span>
+                </div>;
+              })}
+            </div>
           </div>
           <div className="panel-bottom">
             Poisson drive into a named circuit · everything downstream is the connectome

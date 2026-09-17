@@ -90,6 +90,55 @@ export const CYCLE_ORDER = [
 export const stimulusForBar = (bar: number, barsPerStep: number) =>
   CYCLE_ORDER[Math.floor(bar / Math.max(1, barsPerStep)) % CYCLE_ORDER.length];
 
+/**
+ * One-shot sensory events, fired on top of whatever is already driving.
+ *
+ * Each was kept only because it measurably moves the mix. Per-neuron Hz into
+ * the voices and the behavioural readouts, poke against a pIP10 background:
+ *
+ *   poke        pulse  TN1a  basal  MN9  DNp01  MDN
+ *   (none)         76    56     21    3      0   16
+ *   Smell          65    22    126   14      0    4
+ *   Touch          77    45     74   11      0    6
+ *   Warmth         70    23    131    1      0    4
+ *   Threat         27    12     26    0    173   32
+ *   Buzz           64    44     28    6      0   37
+ *
+ * Threat is the one to listen for: LPLC2 is the looming detector, and it drives
+ * the giant fibre from silence to 173 Hz while halving the song circuit. Escape
+ * overriding courtship is what a real fly does, and nothing here imposes it —
+ * it falls out of the wiring.
+ */
+export const POKES: CircuitSpec[] = [
+  { key: 'threat', label: 'Threat', types: ['LPLC2'],
+    note: 'Looming visual threat. Fires the giant fibre and stops the song.' },
+  { key: 'smell', label: 'Smell', types: ['ORN_'],
+    note: 'All 2,634 olfactory receptor neurons at once.' },
+  { key: 'warmth', label: 'Warmth', types: ['TRN_VP'],
+    note: 'Thermo- and hygrosensory neurons of the antenna.' },
+  { key: 'touch', label: 'Touch', types: ['BM_InOm'],
+    note: 'Bristles between the ommatidia — something brushing the head.' },
+  { key: 'buzz', label: 'Buzz', types: ['BM_Vib'],
+    note: 'Vibration bristles. Nudges the backward-walking command.' },
+  { key: 'taste', label: 'Taste', types: ['BM_Taste'],
+    note: 'Taste bristles. Subtle: MaleCNS v1.0 does not carry the sugar-to-proboscis pathway.' },
+];
+
+/**
+ * Behavioural readouts. Not voices — these are watched so the UI can show what
+ * the fly did, rather than only what it sounded like.
+ */
+export const READOUTS: CircuitSpec[] = [
+  { key: 'escape', label: 'Escape (giant fibre)', types: ['DNp01'],
+    note: 'DNp01, the command neuron for the escape takeoff' },
+  { key: 'proboscis', label: 'Proboscis', types: ['MN9', 'MN11', 'MN12'],
+    note: 'Extension motor neurons — the feeding movement' },
+  { key: 'backward', label: 'Backward walk', types: ['MDN'],
+    note: 'Moonwalker descending neurons' },
+  { key: 'legs', label: 'Legs', types: ['Ta depressor MN', 'Ta levator MN', 'Fe reductor MN'],
+    note: 'Tarsal and femoral motor neurons' },
+];
+
 /** Resolve type names to node indices. A name matches exactly or as a prefix. */
 export function resolveTypes(meta: ConnectomeMeta, names: string[]): number[] {
   const out: number[] = [];
@@ -101,6 +150,8 @@ export function resolveTypes(meta: ConnectomeMeta, names: string[]): number[] {
   return out;
 }
 
+/** Voices first, then behavioural readouts; the composer looks channels up by name. */
 export function buildChannels(meta: ConnectomeMeta): Channel[] {
-  return OUTPUT_CIRCUITS.map(c => ({ name: c.key, neurons: resolveTypes(meta, c.types) }));
+  return [...OUTPUT_CIRCUITS, ...READOUTS]
+    .map(c => ({ name: c.key, neurons: resolveTypes(meta, c.types) }));
 }
