@@ -58,3 +58,12 @@ button.poke[aria-pressed=true] {background:#2b3d4d;border-color:#84d7ef;color:#d
   .drive { overflow: visible; padding: 14px; }
   .voices { padding: 10px 4px 0; }
 }
+
+/* The room sits above the controls in the same flex column. */
+.room {flex:1 1 46%;min-height:150px;position:relative;display:flex;flex-direction:column;border-bottom:1px solid #28323e;}
+.room-canvas {flex:1;min-height:0;width:100%;display:block;background:#0a0f15;touch-action:none;cursor:pointer;}
+.room-stats {flex:0 0 auto;display:flex;gap:14px;padding:6px 13px;font-size:9px;color:#7d8c9e;background:#0f151c;border-top:1px solid #1b242e;}
+.room-hint {margin-left:auto;color:#5d6b7a;}
+button.room-toggle {min-height:20px;padding:2px 7px;font-size:9px;}
+.drive-panel .drive {flex:1 1 54%;}
+@media (max-width: 760px) { .room {flex:0 0 auto;height:190px;} }

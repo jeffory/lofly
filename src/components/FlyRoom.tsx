@@ -1,0 +1,161 @@
+/**
+ * The room the fly flies through, drawn on a 2D canvas.
+ *
+ * Rendering and input only: the rules live in src/game/world.ts so they can be
+ * tested without a browser. Every sense the flight triggers is handed straight
+ * to `onSense`, which fires the same pokes the buttons do — so the music
+ * becomes a record of the flight rather than a separate random process.
+ */
+import { useEffect, useRef, useState } from 'react';
+import { createWorld, flap, step, WORLD, type Sense, type World } from '../game/world';
+
+const COLOURS: Record<Sense, string> = {
+  threat: '#ff6b57', smell: '#7ad97a', warmth: '#ffb765',
+  buzz: '#9db4ff', taste: '#ffe08a', touch: '#8fa3b8',
+};
+
+export function FlyRoom({ running, onSense, wingRate }: {
+  running: boolean;
+  onSense: (s: Sense) => void;
+  /** Power-muscle firing, 0–1, used only to set how hard the wings blur. */
+  wingRate: number;
+}) {
+  const host = useRef<HTMLCanvasElement>(null);
+  const world = useRef<World>(createWorld(Date.now() >>> 0));
+  const sense = useRef(onSense);
+  const live = useRef({ running, wingRate });
+  const [stats, setStats] = useState({ distance: 0, bumps: 0, collected: 0 });
+
+  useEffect(() => { sense.current = onSense; }, [onSense]);
+  useEffect(() => { live.current = { running, wingRate }; }, [running, wingRate]);
+
+  useEffect(() => {
+    const canvas = host.current;
+    if (!canvas) return;
+    const g = canvas.getContext('2d');
+    if (!g) return;
+
+    const press = (event: Event) => { event.preventDefault(); flap(world.current); };
+    const key = (event: KeyboardEvent) => {
+      if (event.code === 'Space' || event.code === 'ArrowUp') { event.preventDefault(); flap(world.current); }
+    };
+    canvas.addEventListener('pointerdown', press);
+    window.addEventListener('keydown', key);
+
+    let raf = 0, previous = performance.now(), sinceStats = 0;
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - previous) / 1000);
+      previous = now;
+      const w = world.current;
+
+      if (live.current.running && !document.hidden) {
+        for (const s of step(w, dt)) sense.current(s);
+        sinceStats += dt;
+        if (sinceStats > 0.25) {
+          sinceStats = 0;
+          const collected = Object.entries(w.collected)
+            .filter(([k]) => k !== 'touch').reduce((a, [, n]) => a + n, 0);
+          setStats({ distance: w.distance, bumps: w.bumps, collected });
+        }
+      }
+
+      const { width, height } = canvas.getBoundingClientRect();
+      const ratio = Math.min(devicePixelRatio, 2);
+      if (canvas.width !== Math.round(width * ratio)) {
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+      }
+      g.setTransform(ratio, 0, 0, ratio, 0, 0);
+      draw(g, width, height, w, live.current.wingRate, now / 1000);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      canvas.removeEventListener('pointerdown', press);
+      window.removeEventListener('keydown', key);
+    };
+  }, []);
+
+  return <div className="room">
+    <canvas ref={host} className="room-canvas" aria-label="Fly through the room; click or press space to flap"/>
+    <div className="room-stats">
+      <span>{stats.distance.toFixed(0)} m</span>
+      <span>{stats.collected} picked up</span>
+      <span>{stats.bumps} bumps</span>
+      <span className="room-hint">click / space to flap</span>
+    </div>
+  </div>;
+}
+
+function draw(g: CanvasRenderingContext2D, W: number, H: number,
+              w: World, wing: number, time: number) {
+  g.clearRect(0, 0, W, H);
+
+  // Floor and ceiling, so the walls read as surfaces rather than edges.
+  g.fillStyle = '#131a22';
+  g.fillRect(0, 0, W, H * WORLD.flyRadius);
+  g.fillRect(0, H * (1 - WORLD.flyRadius), W, H * WORLD.flyRadius);
+
+  // Parallax marks, to make the scroll legible without drawing a whole room.
+  g.strokeStyle = '#1b242e';
+  g.lineWidth = 1;
+  for (let i = 0; i < 14; i++) {
+    const x = ((i / 14 - (w.distance * 0.35) % (1 / 14)) % 1 + 1) % 1;
+    g.beginPath(); g.moveTo(x * W, H * 0.06); g.lineTo(x * W, H * 0.94); g.stroke();
+  }
+
+  for (const o of w.obstacles) {
+    const x = o.x * W, gap = o.gapCentre * H, half = WORLD.gapHalfHeight * H;
+    g.fillStyle = o.hit ? '#3a2b2b' : '#22303c';
+    g.strokeStyle = o.hit ? '#7d483b' : '#33465a';
+    const bw = 0.055 * 2 * W;
+    // A gap near an edge leaves a zero-height column; stroking that still
+    // paints a 1px line across the canvas, so skip anything without height.
+    const column = (top: number, h: number) => {
+      if (h <= 0.5) return;
+      g.fillRect(x - bw / 2, top, bw, h);
+      g.strokeRect(x - bw / 2, top, bw, h);
+    };
+    column(0, gap - half);
+    column(gap + half, H - gap - half);
+  }
+
+  for (const p of w.pickups) {
+    const x = p.x * W, y = p.y * H, r = 0.035 * H;
+    const pulse = 0.75 + 0.25 * Math.sin(time * 4 + p.x * 20);
+    g.fillStyle = COLOURS[p.sense];
+    g.globalAlpha = 0.22 * pulse;
+    g.beginPath(); g.arc(x, y, r * 1.9, 0, Math.PI * 2); g.fill();
+    g.globalAlpha = 1;
+    g.beginPath(); g.arc(x, y, r * pulse, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#0b0e12';
+    g.font = `${Math.round(r * 0.9)}px ui-monospace, monospace`;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(p.sense[0].toUpperCase(), x, y + 1);
+  }
+
+  // The fly: a body, and wings whose blur tracks the power muscles.
+  const fx = WORLD.flyX * W, fy = w.y * H, r = WORLD.flyRadius * H;
+  const beat = Math.sin(time * (14 + wing * 26)) * (0.35 + wing * 0.65);
+  g.save();
+  g.translate(fx, fy);
+  g.rotate(Math.max(-0.5, Math.min(0.6, w.vy * 0.5)));
+  g.fillStyle = 'rgba(190,210,230,.5)';
+  for (const side of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(-r * 0.15, side * r * 0.5 * (0.5 + Math.abs(beat)), r * 0.95, r * 0.34, side * beat * 0.5, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.fillStyle = '#d8a15c';
+  g.beginPath(); g.ellipse(0, 0, r, r * 0.72, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#b8342a';
+  g.beginPath(); g.arc(r * 0.72, -r * 0.12, r * 0.34, 0, Math.PI * 2); g.fill();
+  g.restore();
+
+  if (w.cooldown > 0) {
+    g.strokeStyle = `rgba(255,120,90,${w.cooldown / WORLD.bumpCooldown})`;
+    g.lineWidth = 2;
+    g.beginPath(); g.arc(fx, fy, r * 2.1, 0, Math.PI * 2); g.stroke();
+  }
+}

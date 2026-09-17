@@ -9,6 +9,8 @@ import {
 } from './lib/health';
 import type { WingDrive } from './components/FlyScene';
 import { VOICE_CHANNELS, type VoiceRole } from './audio/kits';
+import { FlyRoom } from './components/FlyRoom';
+import type { Sense } from './game/world';
 import { assetBase, loadAtlas, type Atlas } from './lib/atlas';
 
 export function App() {
@@ -75,6 +77,11 @@ export function App() {
         tilt: Math.max(-1, Math.min(1, (basal - fine) / 60)) }
     : { power: 0, tilt: 0 };
 
+  // The room fires the same pokes the buttons do, so a collision and a click
+  // are indistinguishable downstream.
+  const onSense = useCallback((s: Sense) => c.fire(s), [c.fire]);
+  const [roomOn, setRoomOn] = useState(true);
+
   const loading = c.status.startsWith('loading');
   const failed = c.status.startsWith('error');
 
@@ -106,7 +113,11 @@ export function App() {
 
       <div className="workbench">
         <section className="panel drive-panel">
-          <h2>01 / DRIVE</h2>
+          <h2>01 / ROOM
+            <button className="room-toggle" aria-pressed={roomOn}
+                    onClick={() => setRoomOn(v => !v)}>{roomOn ? 'Flying' : 'Paused'}</button>
+          </h2>
+          {roomOn && <FlyRoom running={c.playing} onSense={onSense} wingRate={wing.power}/>}
           <div className="drive">
             <label>Stimulate
               <select aria-label="Stimulus circuit" value={c.cycle ? '__cycle' : c.stimulusKey}
@@ -204,7 +215,7 @@ export function App() {
             </details>
           </div>
           <div className="panel-bottom">
-            Poisson drive into a named circuit · everything downstream is the connectome
+            <span>Collisions and pickups stimulate the fly · the music follows</span>
           </div>
         </section>
 

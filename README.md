@@ -162,6 +162,23 @@ overlays that genuinely float on top of the canvas. Those overlays now live
 to the panel and had to be offset past the header and caption by hand, which
 broke whenever either changed height.
 
+**The room.** The template's left panel was always meant to be a sensory scene,
+and it is one again: a side-scrolling room the fly flies through, where hitting
+something fires `touch` and picking something up fires that sense. The pokes are
+the same ones the buttons fire, so the music becomes a record of the flight
+rather than a separate random process — it is causal, not shuffled.
+
+Rules live in `src/game/world.ts`, pure and free of canvas or audio, so they can
+be tested headlessly; `scripts`-free balance runs against three simulated pilots
+(aiming, casual, mashing) set the constants. Two findings from that:
+
+- Contact has to be edge-triggered *and* rate-limited. Edge alone lets a fly
+  bouncing along the ceiling re-cross the boundary every few frames, which
+  measured ~100 touches a minute and drowned out every other sense.
+- A collision must not end the run. This is a music generator before it is a
+  game, and dying stops the song mid-bar, so a hit is a bump: it costs height
+  and momentum and the flight continues.
+
 **Poking the fly.** Six one-shot sensory events fire on top of whatever is
 driving, and four behavioural readouts show what the fly did rather than only
 what it sounded like. The one to listen for is *Threat*: LPLC2 is the looming
