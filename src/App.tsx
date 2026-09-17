@@ -105,7 +105,7 @@ export function App() {
       </div>}
 
       <div className="workbench">
-        <section className="panel environment-panel">
+        <section className="panel drive-panel">
           <h2>01 / DRIVE</h2>
           <div className="drive">
             <label>Stimulate
