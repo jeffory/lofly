@@ -148,6 +148,20 @@ separately and every message carries its fix:
 - *A lost WebGL context* leaves a permanently black canvas unless handled; both
   scenes now block the default and recover on restore.
 
+**Panels are flex columns, not stacks of absolutely positioned strips.** The
+template positioned each panel's header, body and caption absolutely, which is
+fine when the body is a fixed-size canvas and falls apart as soon as anything in
+it has variable height — three separate overlap bugs here traced to exactly
+that. Each panel is now `display:flex; flex-direction:column`, the header and
+caption are ordinary flex items, and the body takes `flex:1; min-height:0`.
+
+Three uses of `position:absolute` survive, all deliberate: the canvas itself, so
+its size can never feed back into the flex item that sizes it, and the two
+overlays that genuinely float on top of the canvas. Those overlays now live
+*inside* the viewport element rather than beside it — as siblings they anchored
+to the panel and had to be offset past the header and caption by hand, which
+broke whenever either changed height.
+
 **Poking the fly.** Six one-shot sensory events fire on top of whatever is
 driving, and four behavioural readouts show what the fly did rather than only
 what it sounded like. The one to listen for is *Threat*: LPLC2 is the looming
