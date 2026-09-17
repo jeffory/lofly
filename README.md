@@ -179,6 +179,29 @@ be tested headlessly; `scripts`-free balance runs against three simulated pilots
   game, and dying stops the song mid-bar, so a hit is a bump: it costs height
   and momentum and the flight continues.
 
+**A pilot that learns.** Clearing a column is worth +1, a bump -3, and
+`src/game/pilot.ts` searches a four-weight linear policy — flap when `w · x > 0`
+— with a (1+1) evolution strategy: perturb, fly a stretch, keep the perturbation
+only if it scored better. Held-out rooms: 16 columns cleared and 0 bumps per
+40 s, against 0 cleared and 9 bumps for a fly that never flaps.
+
+Episode length turned out to matter more than anything else. At 3 s and 5 s it
+never converged in the budget at all — with a column every 2.8 s an episode that
+short sees one or two, and the fitness is mostly noise. At 14 s it converged on
+every seed tried, in 28–140 s of flight. It ships with weights found offline so
+it flies immediately, and keeps learning from there; **Relearn** zeroes them if
+you would rather watch it work the policy out.
+
+**What is and is not learning here.** The connectome is not flying the fly. Its
+state advances about 400 ms of brain time per bar, so it updates roughly once
+every 2.5 s — far too slow to close a loop that needs decisions several times a
+second. The pilot is the linear rule, and the pilot is what learns. The brain
+does get a vote, through a zero-centred steering-muscle signal the policy can
+lean on, so flight and connectome genuinely influence one another. Choosing that
+signal mattered: the power-muscle rate sits near its ceiling almost always, so
+as a policy input it is not a signal but a constant bias toward flapping, worth
+9 bumps in 42 s against 1 for the steering balance.
+
 **Poking the fly.** Six one-shot sensory events fire on top of whatever is
 driving, and four behavioural readouts show what the fly did rather than only
 what it sounded like. The one to listen for is *Threat*: LPLC2 is the looming

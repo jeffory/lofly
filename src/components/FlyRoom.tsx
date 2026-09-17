@@ -8,26 +8,42 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createWorld, flap, step, WORLD, type Sense, type World } from '../game/world';
+import { createPilot, fly, EPISODE, type Pilot } from '../game/pilot';
 
 const COLOURS: Record<Sense, string> = {
   threat: '#ff6b57', smell: '#7ad97a', warmth: '#ffb765',
   buzz: '#9db4ff', taste: '#ffe08a', touch: '#8fa3b8',
 };
 
-export function FlyRoom({ running, onSense, wingRate }: {
+export function FlyRoom({ running, onSense, wingRate, brainDrive }: {
   running: boolean;
   onSense: (s: Sense) => void;
-  /** Power-muscle firing, 0–1, used only to set how hard the wings blur. */
+  /** Power-muscle firing, 0–1. Blurs the wings. */
   wingRate: number;
+  /**
+   * A zero-centred brain signal, -1..1, that the pilot may lean on.
+   *
+   * Power-muscle rate is useless here: it sits near its ceiling almost always,
+   * so as a policy input it is not a signal at all, just a constant bias toward
+   * flapping — which measured as 9 bumps in 42 s against 0 without it. The
+   * steering-muscle balance does vary with what is driving the brain, and being
+   * zero-mean it modulates rather than pushes.
+   */
+  brainDrive: number;
 }) {
   const host = useRef<HTMLCanvasElement>(null);
   const world = useRef<World>(createWorld(Date.now() >>> 0));
   const sense = useRef(onSense);
-  const live = useRef({ running, wingRate });
-  const [stats, setStats] = useState({ distance: 0, bumps: 0, collected: 0 });
+  const live = useRef({ running, wingRate, brainDrive });
+  const [stats, setStats] = useState({ distance: 0, bumps: 0, collected: 0, passed: 0 });
+  const pilot = useRef<Pilot>(createPilot(Date.now() >>> 0));
+  const [auto, setAuto] = useState(true);
+  const [learning, setLearning] = useState({ episode: 0, best: 0, recent: [] as number[] });
+  const autoRef = useRef(auto);
+  useEffect(() => { autoRef.current = auto; }, [auto]);
 
   useEffect(() => { sense.current = onSense; }, [onSense]);
-  useEffect(() => { live.current = { running, wingRate }; }, [running, wingRate]);
+  useEffect(() => { live.current = { running, wingRate, brainDrive }; }, [running, wingRate, brainDrive]);
 
   useEffect(() => {
     const canvas = host.current;
@@ -50,13 +66,21 @@ export function FlyRoom({ running, onSense, wingRate }: {
       const w = world.current;
 
       if (live.current.running && !document.hidden) {
-        for (const s of step(w, dt)) sense.current(s);
+        // The brain biases the pilot on a slow channel, so flight and
+        // connectome influence each other rather than running side by side.
+        const fired = autoRef.current
+          ? fly(pilot.current, w, dt, live.current.brainDrive)
+          : step(w, dt);
+        for (const s of fired) sense.current(s);
         sinceStats += dt;
         if (sinceStats > 0.25) {
           sinceStats = 0;
           const collected = Object.entries(w.collected)
             .filter(([k]) => k !== 'touch').reduce((a, [, n]) => a + n, 0);
-          setStats({ distance: w.distance, bumps: w.bumps, collected });
+          setStats({ distance: w.distance, bumps: w.bumps, collected, passed: w.passed });
+          const p = pilot.current;
+          setLearning({ episode: p.episode, best: p.bestScore === -Infinity ? 0 : p.bestScore,
+                        recent: p.history.slice(-24) });
         }
       }
 
@@ -80,12 +104,37 @@ export function FlyRoom({ running, onSense, wingRate }: {
   return <div className="room">
     <canvas ref={host} className="room-canvas" aria-label="Fly through the room; click or press space to flap"/>
     <div className="room-stats">
-      <span>{stats.distance.toFixed(0)} m</span>
+      <span>{stats.passed} cleared</span>
       <span>{stats.collected} picked up</span>
       <span>{stats.bumps} bumps</span>
-      <span className="room-hint">click / space to flap</span>
+      {auto
+        ? <span className="room-learn" title="Reward is a column cleared; a bump costs three">
+            gen {learning.episode} · best {learning.best.toFixed(0)}
+            <Spark values={learning.recent}/>
+          </span>
+        : <span className="room-hint">click / space to flap</span>}
+      <span className="room-controls">
+        <button aria-pressed={auto} onClick={() => setAuto(v => !v)}>
+          {auto ? 'Autopilot' : 'Manual'}
+        </button>
+        <button title="Start learning again from zero weights"
+                onClick={() => { pilot.current = createPilot(Date.now() >>> 0, true); }}>
+          Relearn
+        </button>
+      </span>
     </div>
   </div>;
+}
+
+/** Fitness of recent episodes, so the search is visible rather than asserted. */
+function Spark({ values }: { values: number[] }) {
+  if (values.length < 2) return null;
+  const lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
+  const points = values.map((v, i) =>
+    `${(i / (values.length - 1)) * 46},${10 - ((v - lo) / span) * 9}`).join(' ');
+  return <svg className="spark" viewBox="0 0 46 10" aria-hidden="true">
+    <polyline points={points} fill="none" stroke="#84d7ef" strokeWidth="1"/>
+  </svg>;
 }
 
 function draw(g: CanvasRenderingContext2D, W: number, H: number,

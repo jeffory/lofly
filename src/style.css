@@ -67,3 +67,9 @@ button.poke[aria-pressed=true] {background:#2b3d4d;border-color:#84d7ef;color:#d
 button.room-toggle {min-height:20px;padding:2px 7px;font-size:9px;}
 .drive-panel .drive {flex:1 1 54%;}
 @media (max-width: 760px) { .room {flex:0 0 auto;height:190px;} }
+
+.room-learn {display:flex;align-items:center;gap:6px;color:#9db4c8;}
+.spark {width:46px;height:10px;overflow:visible;}
+.room-controls {margin-left:auto;display:flex;gap:5px;}
+.room-controls button {min-height:19px;padding:1px 7px;font-size:9px;}
+.room-controls button[aria-pressed=true] {background:#2b3d4d;border-color:#84d7ef;color:#d7f3fb;}

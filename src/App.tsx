@@ -117,7 +117,8 @@ export function App() {
             <button className="room-toggle" aria-pressed={roomOn}
                     onClick={() => setRoomOn(v => !v)}>{roomOn ? 'Flying' : 'Paused'}</button>
           </h2>
-          {roomOn && <FlyRoom running={c.playing} onSense={onSense} wingRate={wing.power}/>}
+          {roomOn && <FlyRoom running={c.playing} onSense={onSense}
+                              wingRate={wing.power} brainDrive={wing.tilt}/>}
           <div className="drive">
             <label>Stimulate
               <select aria-label="Stimulus circuit" value={c.cycle ? '__cycle' : c.stimulusKey}

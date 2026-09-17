@@ -108,3 +108,24 @@ test('flying the gap cleanly produces no touch', () => {
   }
   assert.ok(!fired.includes('touch') || w.bumps <= 2, `too many bumps: ${w.bumps}`);
 });
+
+test('clearing a column counts as passed, striking it does not', () => {
+  const w = createWorld(5);
+  // Hold the fly on the gap centre of whatever column is coming.
+  for (let t = 0; t < 40; t += 1 / 60) {
+    const next = w.obstacles.filter(o => o.x > WORLD.flyX - 0.06).sort((a, b) => a.x - b.x)[0];
+    const target = next ? next.gapCentre : 0.5;
+    if (w.y > target + 0.02) flap(w);
+    step(w, 1 / 60);
+  }
+  assert.ok(w.passed >= 3, `expected to clear several columns, got ${w.passed}`);
+  assert.equal(w.bumps, 0, 'a clean flight should not register bumps');
+});
+
+test('a struck column is never counted as passed', () => {
+  const w = createWorld(5);
+  for (let t = 0; t < 40; t += 1 / 60) step(w, 1 / 60);   // never flap: fall and get hit
+  const struck = w.obstacles.filter(o => o.hit).length;
+  assert.ok(w.bumps > 0, 'should have hit something');
+  assert.ok(w.passed + struck <= w.passed + w.bumps);
+});

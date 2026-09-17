@@ -31,7 +31,7 @@ export const WORLD = {
   gapHalfHeight: 0.28,
 };
 
-export type Obstacle = { x: number; gapCentre: number; hit: boolean };
+export type Obstacle = { x: number; gapCentre: number; hit: boolean; passed: boolean };
 export type Pickup = { x: number; y: number; sense: Sense; taken: boolean };
 
 export type World = {
@@ -39,6 +39,8 @@ export type World = {
   vy: number;
   distance: number;
   bumps: number;
+  /** Columns cleared without touching them. The reward signal. */
+  passed: number;
   collected: Record<Sense, number>;
   obstacles: Obstacle[];
   pickups: Pickup[];
@@ -56,7 +58,7 @@ export const PICKUP_SENSES: Sense[] = ['threat', 'smell', 'warmth', 'buzz', 'tas
 
 export function createWorld(seed = 1): World {
   return {
-    y: 0.5, vy: 0, distance: 0, bumps: 0,
+    y: 0.5, vy: 0, distance: 0, bumps: 0, passed: 0,
     collected: { threat: 0, smell: 0, warmth: 0, touch: 0, buzz: 0, taste: 0 },
     obstacles: [], pickups: [],
     sinceObstacle: WORLD.obstacleEvery * 0.55,
@@ -104,7 +106,7 @@ export function step(w: World, dt: number): Sense[] {
   w.sinceObstacle += d;
   if (w.sinceObstacle >= WORLD.obstacleEvery) {
     w.sinceObstacle = 0;
-    w.obstacles.push({ x: 1.1, gapCentre: 0.28 + random(w) * 0.44, hit: false });
+    w.obstacles.push({ x: 1.1, gapCentre: 0.28 + random(w) * 0.44, hit: false, passed: false });
   }
   w.sincePickup += d;
   if (w.sincePickup >= WORLD.pickupEvery) {
@@ -118,7 +120,13 @@ export function step(w: World, dt: number): Sense[] {
 
   const move = WORLD.scrollSpeed * d;
   for (const o of w.obstacles) {
+    const before = o.x;
     o.x -= move;
+    // Cleared once the column is fully behind the fly and was never struck.
+    if (!o.passed && before - 0.055 >= WORLD.flyX && o.x - 0.055 < WORLD.flyX) {
+      o.passed = true;
+      if (!o.hit) w.passed++;
+    }
     // Column occupies a band in x; the gap is the safe corridor.
     const near = Math.abs(o.x - WORLD.flyX) < 0.055 + r;
     if (near && !o.hit && !w.cooldown &&
