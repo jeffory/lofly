@@ -19,6 +19,8 @@ type Exports = {
   lf_reset(): void;
   lf_clear_channels(): void;
   lf_set_channel(neuron: number, channel: number, slot: number): void;
+  lf_set_dt(dt: number): void;
+  lf_dt(): number;
   lf_simulate(durationMs: number, stim: number, stimLen: number, rateHz: number,
               duty: number, channels: number, maxEvents: number): number;
   lf_events_ptr(): number;
@@ -32,9 +34,9 @@ type Exports = {
 const DEFAULT_DT = 0.2;
 
 export class WasmBrain {
-  readonly meta: ConnectomeData['meta'];
+  meta: ConnectomeData['meta'];
   private readonly w: Exports;
-  private readonly dt: number;
+  private dt: number;
   private channelKey = '';
   private stimPtr = 0;
   private stimCap = 0;
@@ -97,6 +99,13 @@ export class WasmBrain {
 
   simulate(request: SimRequest): SliceResult {
     const wallStart = performance.now();
+    // Switching step resets the network, so only do it when it actually changes.
+    if (request.dt && Math.abs(request.dt - this.dt) > 1e-6) {
+      this.w.lf_set_dt(request.dt);
+      this.dt = request.dt;
+      this.meta = { ...this.meta, lif: { ...this.meta.lif, dt: request.dt } };
+      this.channelKey = '';
+    }
     this.bindChannels(request);
 
     // The kernel drives one population per call; flatten the request onto the

@@ -15,7 +15,7 @@ const COLOURS: Record<Sense, string> = {
   buzz: '#9db4ff', taste: '#ffe08a', touch: '#8fa3b8',
 };
 
-export function FlyRoom({ running, onSense, wingRate, brainDrive }: {
+export function FlyRoom({ running, onSense, wingRate, brainDrive, readBrain }: {
   running: boolean;
   onSense: (s: Sense) => void;
   /** Power-muscle firing, 0–1. Blurs the wings. */
@@ -30,11 +30,18 @@ export function FlyRoom({ running, onSense, wingRate, brainDrive }: {
    * zero-mean it modulates rather than pushes.
    */
   brainDrive: number;
+  /**
+   * When live pacing is on, a getter for the brain's current steering balance.
+   * Reading it per frame is the point: the per-bar `brainDrive` prop only
+   * changes once every 2.5 s, which is too slow to steer with.
+   */
+  readBrain: (() => number) | null;
 }) {
   const host = useRef<HTMLCanvasElement>(null);
   const world = useRef<World>(createWorld(Date.now() >>> 0));
   const sense = useRef(onSense);
   const live = useRef({ running, wingRate, brainDrive });
+  const read = useRef(readBrain);
   const [stats, setStats] = useState({ distance: 0, bumps: 0, collected: 0, passed: 0 });
   const pilot = useRef<Pilot>(createPilot(Date.now() >>> 0));
   const [auto, setAuto] = useState(true);
@@ -44,6 +51,7 @@ export function FlyRoom({ running, onSense, wingRate, brainDrive }: {
 
   useEffect(() => { sense.current = onSense; }, [onSense]);
   useEffect(() => { live.current = { running, wingRate, brainDrive }; }, [running, wingRate, brainDrive]);
+  useEffect(() => { read.current = readBrain; }, [readBrain]);
 
   useEffect(() => {
     const canvas = host.current;
@@ -69,7 +77,7 @@ export function FlyRoom({ running, onSense, wingRate, brainDrive }: {
         // The brain biases the pilot on a slow channel, so flight and
         // connectome influence each other rather than running side by side.
         const fired = autoRef.current
-          ? fly(pilot.current, w, dt, live.current.brainDrive)
+          ? fly(pilot.current, w, dt, read.current ? read.current() : live.current.brainDrive)
           : step(w, dt);
         for (const s of fired) sense.current(s);
         sinceStats += dt;

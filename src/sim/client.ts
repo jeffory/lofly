@@ -19,7 +19,7 @@ export class BrainClient {
           this.pending.forEach(r => r({
             events: [], channelRates: new Float32Array(0), activity: new Float32Array(0),
             totalSpikes: 0, brainMs: 0, wallMs: 0, truncated: false, awakeNeurons: 0,
-            frames: new Uint8Array(0), frameCount: 0,
+            frames: new Uint8Array(0), frameCount: 0, sliceRates: new Float32Array(0),
           }));
           this.pending.clear();
         } else if (message.type === 'result') {

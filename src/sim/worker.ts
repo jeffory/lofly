@@ -38,13 +38,14 @@ function simulateBar(source: Engine, request: SimRequest): SimResult {
     const single = source.simulate(request);
     const frames = new Uint8Array(single.activity.length);
     for (let i = 0; i < frames.length; i++) frames[i] = Math.round(single.activity[i] * 255);
-    return { ...single, frames, frameCount: 1 };
+    return { ...single, frames, frameCount: 1, sliceRates: new Float32Array(single.channelRates) };
   }
 
   const sliceMs = request.durationMs / count;
   const duty = request.dutyCycle ?? 1;
   const rows = source.meta.viewerRows;
   const frames = new Uint8Array(rows * count);
+  const sliceRates = new Float32Array(count * request.channels.length);
   const events: SimResult['events'] = [];
   let totalSpikes = 0, wallMs = 0, brainMs = 0, truncated = false, awake = 0;
   let rates: Float32Array | null = null;
@@ -68,6 +69,7 @@ function simulateBar(source: Engine, request: SimRequest): SimResult {
     for (let c = 0; c < rates.length; c++) rates[c] += slice.channelRates[c] / count;
     const base = i * rows;
     for (let r = 0; r < rows; r++) frames[base + r] = Math.round(slice.activity[r] * 255);
+    sliceRates.set(slice.channelRates, i * request.channels.length);
   }
 
   // The bar's own activity is the last slice, which is what the view settles on.
@@ -75,8 +77,11 @@ function simulateBar(source: Engine, request: SimRequest): SimResult {
   const last = (count - 1) * rows;
   for (let r = 0; r < rows; r++) activity[r] = frames[last + r] / 255;
 
+  // Notes come from a short window even when the simulation covers a whole bar.
+  const musicWindow = request.musicWindowMs ?? request.durationMs;
   return {
-    events, channelRates: rates ?? new Float32Array(0), activity, frames, frameCount: count,
+    events: musicWindow >= request.durationMs ? events : events.filter(e => e.at <= musicWindow),
+    channelRates: rates ?? new Float32Array(0), activity, frames, frameCount: count, sliceRates,
     totalSpikes, brainMs, wallMs, truncated, awakeNeurons: awake,
   };
 }
@@ -136,7 +141,8 @@ self.onmessage = async (event: MessageEvent<WorkerIn>) => {
       if (!engine) throw Error('connectome not loaded');
       const result = simulateBar(engine, message.request);
       post({ type: 'result', id: message.id, result },
-           [result.activity.buffer, result.channelRates.buffer, result.frames.buffer]);
+           [result.activity.buffer, result.channelRates.buffer,
+            result.frames.buffer, result.sliceRates.buffer]);
     }
   } catch (error) {
     post({ type: 'error', message: error instanceof Error ? error.message : String(error) });

@@ -58,6 +58,18 @@ export type SimRequest = {
    * animate across the bar instead of holding one value for 2.5 seconds.
    */
   activityFrames?: number;
+  /**
+   * Integration step override. Real-time pacing needs a coarser step to fit a
+   * whole bar of brain time inside a bar of wall time.
+   */
+  dt?: number;
+  /**
+   * Only events before this point are offered to the composer. In real-time
+   * pacing the window simulated is a whole bar, but a bar of brain time makes
+   * mush of the music -- longer windows average the structure away -- so notes
+   * still come from a short slice of it.
+   */
+  musicWindowMs?: number;
 };
 
 /** What one engine call returns, for a single window. */
@@ -86,6 +98,12 @@ export type SimResult = SliceResult & {
    */
   frames: Uint8Array;
   frameCount: number;
+  /**
+   * Channel rates per sub-window, `frameCount` x channels. Released on the
+   * audio clock like the activity frames, so acontroller can read the brain
+   * several times a bar instead of once.
+   */
+  sliceRates: Float32Array;
 };
 
 export type WorkerIn =

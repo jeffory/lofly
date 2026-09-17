@@ -120,6 +120,34 @@ pub unsafe extern "C" fn lf_init(
     BRAIN = Some(b);
 }
 
+/// Change the integration step and restart from rest.
+///
+/// Real-time control needs the brain to advance as fast as the wall clock, and
+/// at the musical step of 0.2 ms that costs slightly more than a bar per bar --
+/// no headroom for anything else. A coarser step buys it back: 0.45 ms runs
+/// about 2x real time and divides the 1.8 ms delay into exactly 4 steps. The
+/// trade is integration fidelity; whole-network rate drifts up by roughly a
+/// third across this range, which matters for a published figure and does not
+/// matter for deciding when to flap.
+///
+/// State cannot survive the change -- the delay ring is sized in steps -- so
+/// this resets.
+#[no_mangle]
+pub extern "C" fn lf_set_dt(dt: f32) {
+    let b = brain();
+    if dt > 0.0 && (dt - b.dt).abs() > 1e-6 {
+        b.dt = dt;
+        let ring_len = (DELAY_MS / dt).round() as usize + 1;
+        b.ring_len = ring_len;
+        b.ring = vec![0; ring_len * b.ring_cap];
+        b.ring_n = vec![0; ring_len];
+    }
+    lf_reset();
+}
+
+#[no_mangle]
+pub extern "C" fn lf_dt() -> f32 { brain().dt }
+
 #[no_mangle]
 pub extern "C" fn lf_reset() {
     let b = brain();

@@ -77,6 +77,23 @@ export function App() {
         tilt: Math.max(-1, Math.min(1, (basal - fine) / 60)) }
     : { power: 0, tilt: 0 };
 
+  /**
+   * The brain signal the pilot leans on. Under live pacing this is read from
+   * the per-slice stream, so it refreshes several times a bar instead of once,
+   * which is the whole point of pacing the brain to the wall clock.
+   */
+  const readMotor = useCallback(() => {
+    const rates = c.motor.current;
+    if (!rates.length || !c.meta) return wing.tilt;
+    const at = (key: string) => {
+      const i = allChannels.findIndex(x => x.key === key);
+      if (i < 0 || i >= rates.length) return 0;
+      const size = resolveTypes(c.meta!, allChannels[i].types).length;
+      return size ? rates[i] / size : 0;
+    };
+    return Math.max(-1, Math.min(1, (at('steer-basal') - at('steer-fine')) / 60));
+  }, [c.motor, c.meta, allChannels, wing.tilt]);
+
   // The room fires the same pokes the buttons do, so a collision and a click
   // are indistinguishable downstream.
   const onSense = useCallback((s: Sense) => c.fire(s), [c.fire]);
@@ -105,6 +122,11 @@ export function App() {
         </div>
       </div>
       {(error || failed) && <p className="error" role="alert">{error || c.status}</p>}
+      {c.liveDropped && <div className="health health-warn" role="status">
+        <p><b>Live brain pacing gave up.</b>
+          <span>A whole bar of brain time did not fit inside a bar of wall time here, so
+            it fell back to the musical window to protect the audio.</span></p>
+      </div>}
       {health.level !== 'ok' && <div className={`health health-${health.level}`} role="status">
         {health.messages.map(m => <p key={m.text}>
           <b>{m.text}</b> <span>{m.remedy}</span>
@@ -114,11 +136,26 @@ export function App() {
       <div className="workbench">
         <section className="panel drive-panel">
           <h2>01 / ROOM
-            <button className="room-toggle" aria-pressed={roomOn}
-                    onClick={() => setRoomOn(v => !v)}>{roomOn ? 'Flying' : 'Paused'}</button>
+            <span className="h2-controls">
+              <button className="room-toggle" aria-pressed={c.livePace}
+                      disabled={!c.meta}
+                      title={c.livePace
+                        ? 'Brain advancing with the wall clock at a 0.45 ms step.'
+                        : c.livePrediction == null
+                          ? 'Advance the brain with the wall clock so the pilot can read it many times a bar.'
+                          : `Advance the brain with the wall clock. Estimated ${Math.round(c.livePrediction * 100)}% of each bar${c.livePrediction > 0.92 ? ' — probably too slow here, it will fall back on its own.' : '.'}`}
+                      onClick={() => c.setLivePace(!c.livePace)}>
+                {c.livePace ? 'Live brain'
+                  : c.livePrediction != null && c.livePrediction > 0.92 ? 'Brain: musical ⚠'
+                  : 'Brain: musical'}
+              </button>
+              <button className="room-toggle" aria-pressed={roomOn}
+                      onClick={() => setRoomOn(v => !v)}>{roomOn ? 'Flying' : 'Paused'}</button>
+            </span>
           </h2>
           {roomOn && <FlyRoom running={c.playing} onSense={onSense}
-                              wingRate={wing.power} brainDrive={wing.tilt}/>}
+                              wingRate={wing.power} brainDrive={wing.tilt}
+                              readBrain={c.livePace ? readMotor : null}/>}
           <div className="drive">
             <label>Stimulate
               <select aria-label="Stimulus circuit" value={c.cycle ? '__cycle' : c.stimulusKey}

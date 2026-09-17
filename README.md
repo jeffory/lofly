@@ -179,6 +179,30 @@ be tested headlessly; `scripts`-free balance runs against three simulated pilots
   game, and dying stops the song mid-bar, so a hit is a bump: it costs height
   and momentum and the flight continues.
 
+**Live brain pacing, optional.** By default the brain advances ~400 ms of brain
+time per 2.5 s bar, which updates it about once a bar — far too slow to steer
+with. Live pacing advances it with the wall clock instead, so the pilot can read
+it several times a bar.
+
+It costs a coarser step to fit. Measured, a bar of brain time at the musical
+0.2 ms step takes 104% of a bar with nothing else running at all; at 0.45 ms it
+takes 48% and still divides the 1.8 ms delay into whole steps. The trade is
+integration fidelity — whole-network rate drifts up by roughly a third across
+that range, which would matter for a published figure and does not matter for
+deciding when to flap.
+
+Two things it does not do. It does not make the music worse: the window
+simulated is a whole bar but the composer still only sees `brainMsPerBar` of it,
+because bar-long windows average the structure away. And it does not fight for
+the audio: if a bar costs more than 92% of itself the mode gives up on its own
+and says so. The toggle estimates the cost from the load already measured and
+warns before you turn it on.
+
+On the machine this was built on it cannot be sustained — software WebGL is
+already taking a third of every bar — and it correctly refuses. On hardware with
+a real GPU the kernel measured 2.09x real time at that step, so there should be
+room.
+
 **A pilot that learns.** Clearing a column is worth +1, a bump -3, and
 `src/game/pilot.ts` searches a four-weight linear policy — flap when `w · x > 0`
 — with a (1+1) evolution strategy: perturb, fly a stretch, keep the perturbation

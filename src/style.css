@@ -73,3 +73,5 @@ button.room-toggle {min-height:20px;padding:2px 7px;font-size:9px;}
 .room-controls {margin-left:auto;display:flex;gap:5px;}
 .room-controls button {min-height:19px;padding:1px 7px;font-size:9px;}
 .room-controls button[aria-pressed=true] {background:#2b3d4d;border-color:#84d7ef;color:#d7f3fb;}
+
+.h2-controls {display:flex;gap:5px;align-items:center;}
