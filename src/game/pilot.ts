@@ -70,13 +70,44 @@ const rnd = (p: Pilot) => {
 const gauss = (p: Pilot) =>
   Math.sqrt(-2 * Math.log(1 - rnd(p))) * Math.cos(2 * Math.PI * rnd(p));
 
-/** What the pilot sees: gap offset, fall speed, closing distance, bias. */
+/** Room widths from the near column within which the pilot starts leaning
+ *  toward the gap after it. */
+const HANDOVER = 0.15;
+/** How far it leans, at most. Measured against the smooth weights: 0.2 cut
+ *  target snaps from 11.6 to 7.9 a minute with no bumps; 0.3 began costing
+ *  bumps, and 0.5 cost 2.8 a minute. */
+const LEAN = 0.2;
+
+/**
+ * What the pilot sees: gap offset, fall speed, closing distance, brain.
+ *
+ * The gap offset looks one column further than the nearest. Using only the
+ * nearest snapped the target to the next gap the instant a column passed. The
+ * first attempt at blending weighted the near column MORE as it approached,
+ * which collapses to "nearest" at exactly the moment it matters and measured
+ * as no change at all. The lean has to go the other way: as the column
+ * arrives, the fly is committed through it, so the target shifts toward what
+ * comes next.
+ *
+ * Pickups are deliberately not in here. A version that saw them collected 47%
+ * at three times the jerk; making the room spawn them near the path and
+ * widening the catch radius collects 64% with the flight untouched.
+ */
 export function observe(w: World, brainDrive: number): Weights {
-  const next = w.obstacles
+  const ahead = w.obstacles
     .filter(o => o.x + 0.055 > WORLD.flyX)
-    .sort((a, b) => a.x - b.x)[0];
-  const target = next ? next.gapCentre : 0.5;
-  const dx = next ? Math.min(1, (next.x - WORLD.flyX) / 0.8) : 1;
+    .sort((a, b) => a.x - b.x);
+  const [a, b] = ahead;
+  let target = 0.5, dx = 1;
+  if (a) {
+    dx = Math.min(1, (a.x - WORLD.flyX) / 0.8);
+    target = a.gapCentre;
+    if (b) {
+      const d = a.x - WORLD.flyX;
+      const lean = d < HANDOVER ? (1 - d / HANDOVER) * LEAN : 0;
+      target = a.gapCentre * (1 - lean) + b.gapCentre * lean;
+    }
+  }
   return [
     (w.y - target) * 3,      // positive when below the gap, so flapping should help
     w.vy * 1.4,
@@ -93,9 +124,12 @@ export function fly(p: Pilot, w: World, dt: number, brainDrive: number): Sense[]
 
   const before = { passed: w.passed, bumps: w.bumps };
   const fired = step(w, dt);
-  // Clearing a column is the reward; a bump costs more than a column is worth,
-  // otherwise the pilot learns to barge through everything.
-  p.score += (w.passed - before.passed) * 1 - (w.bumps - before.bumps) * 3;
+  // Clearing a column and taking a pickup are each worth one; a bump costs
+  // three, otherwise the pilot learns to barge through everything. Pickups
+  // count even though the pilot cannot see them: the room places them near the
+  // path, so a pilot that holds its line well is rewarded for it.
+  const picked = fired.filter(f => f !== 'touch').length;
+  p.score += (w.passed - before.passed) + picked - (w.bumps - before.bumps) * 3;
   p.elapsed += dt;
 
   if (p.elapsed >= EPISODE) {

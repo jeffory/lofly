@@ -29,6 +29,23 @@ export const WORLD = {
   obstacleEvery: 2.3,
   pickupEvery: 2.2,
   gapHalfHeight: 0.28,
+  /**
+   * How far a pickup may sit from the gap it shares the screen with, as a
+   * fraction of room height. 97% of pickups are physically reachable, but a
+   * pilot that can only flap or fall cannot cross the room in the time it has,
+   * so scattering them uniformly capped collection near 40% no matter how the
+   * pilot was trained. Spawning them near the path the fly must take anyway
+   * is what a level designer would do.
+   */
+  pickupSpread: 0.10,
+  /**
+   * How close the fly must pass to take a pickup, beyond its own radius. A
+   * magnet, in game terms. Swept with the smooth pilot: 0.035 collected 37%,
+   * 0.07 49%, 0.10 64%, 0.13 72% — with bumps and jerk unchanged throughout,
+   * because the pilot never has to leave its line. Chasing orbs with the
+   * policy instead bought 47% at three times the jerk.
+   */
+  pickupReach: 0.10,
 };
 
 export type Obstacle = { x: number; gapCentre: number; hit: boolean; passed: boolean };
@@ -111,8 +128,12 @@ export function step(w: World, dt: number): Sense[] {
   w.sincePickup += d;
   if (w.sincePickup >= WORLD.pickupEvery) {
     w.sincePickup = 0;
+    // Sit the pickup near the corridor of whichever column it will share the
+    // screen with, so it lies close to the path rather than across the room.
+    const near = w.obstacles.length ? w.obstacles[w.obstacles.length - 1].gapCentre : 0.5;
+    const y = Math.min(0.85, Math.max(0.15, near + (random(w) * 2 - 1) * WORLD.pickupSpread));
     w.pickups.push({
-      x: 1.1, y: 0.15 + random(w) * 0.7,
+      x: 1.1, y,
       sense: PICKUP_SENSES[Math.floor(random(w) * PICKUP_SENSES.length)],
       taken: false,
     });
@@ -141,7 +162,7 @@ export function step(w: World, dt: number): Sense[] {
   }
   for (const p of w.pickups) {
     p.x -= move;
-    if (!p.taken && Math.hypot(p.x - WORLD.flyX, p.y - w.y) < r + 0.035) {
+    if (!p.taken && Math.hypot(p.x - WORLD.flyX, p.y - w.y) < r + WORLD.pickupReach) {
       p.taken = true;
       w.collected[p.sense]++;
       fired.push(p.sense);

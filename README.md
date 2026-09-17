@@ -179,6 +179,24 @@ be tested headlessly; `scripts`-free balance runs against three simulated pilots
   game, and dying stops the song mid-bar, so a hit is a bump: it costs height
   and momentum and the flight continues.
 
+**Seeing ahead, and getting the orbs.** Two things looked like pilot problems
+and measured as something else. The pilot only saw the nearest column, so its
+target snapped to the next gap the instant one passed — 11.6 snaps a minute.
+Blending in the next gap fixes that, but only if the blend leans the right way:
+weighting the near column *more* as it approaches collapses to "nearest" at
+exactly the moment it matters and measured as no change at all. Leaning toward
+the next gap as the near one arrives cuts snaps to 7.9 with no bumps; leaning
+harder starts costing them. It does not make the flight smoother, though — the
+jerk is the bang-bang flap, not the target.
+
+The orbs were the real gap: they were in neither the pilot's observation nor
+its reward, so it took 31% of them by accident. Teaching it to see them got 47%
+at three times the jerk. What worked was treating it as level design: 97% of
+orbs were physically reachable, so they now spawn near the corridor the fly has
+to take anyway, and the catch radius is a visible halo. The unchanged smooth
+pilot collects 64% — swept from 37% at the old radius — with bumps and jerk
+untouched, because it never has to leave its line.
+
 **Live brain pacing, optional.** By default the brain advances ~400 ms of brain
 time per 2.5 s bar, which updates it about once a bar — far too slow to steer
 with. Live pacing advances it with the wall clock instead, so the pilot can read

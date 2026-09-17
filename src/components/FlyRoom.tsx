@@ -182,8 +182,9 @@ function draw(g: CanvasRenderingContext2D, W: number, H: number,
     const x = p.x * W, y = p.y * H, r = 0.035 * H;
     const pulse = 0.75 + 0.25 * Math.sin(time * 4 + p.x * 20);
     g.fillStyle = COLOURS[p.sense];
-    g.globalAlpha = 0.22 * pulse;
-    g.beginPath(); g.arc(x, y, r * 1.9, 0, Math.PI * 2); g.fill();
+    // The halo is the catch radius, drawn honestly: pass inside it and you have it.
+    g.globalAlpha = 0.16 * pulse;
+    g.beginPath(); g.arc(x, y, (WORLD.pickupReach + WORLD.flyRadius) * H, 0, Math.PI * 2); g.fill();
     g.globalAlpha = 1;
     g.beginPath(); g.arc(x, y, r * pulse, 0, Math.PI * 2); g.fill();
     g.fillStyle = '#0b0e12';
