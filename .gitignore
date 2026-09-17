@@ -5,3 +5,13 @@ dist/
 *.tsbuildinfo
 .DS_Store
 outputs/
+
+# pre-compressed build artifacts
+*.br
+wasm/target/
+
+# re-fetchable MaleCNS source tables
+source-data/
+
+# local wrangler state
+.wrangler/

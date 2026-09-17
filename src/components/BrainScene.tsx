@@ -3,14 +3,28 @@ import * as THREE from "three";
 import type { ActivityFrame } from "../lib/replay";
 import type { Atlas } from "../lib/atlas";
 
-/** Real anatomy; model values are looked up by body ID, never by spatial proximity. */
-export function BrainScene({ atlas, frame }: { atlas: Atlas; frame: ActivityFrame | null }) {
+/**
+ * Real anatomy; model values are looked up by body ID, never by spatial proximity.
+ *
+ * Two input paths. `frame` is the template's original replay format, resolved by
+ * body ID. `activity` is the live path: one normalized value per drawn point, in
+ * the order this component builds them, which the simulation worker fills
+ * directly so a 124k-point update costs a memcpy instead of 124k Map lookups.
+ * Live values ease toward their target so a once-per-bar update still reads as
+ * motion rather than a strobe.
+ */
+export function BrainScene({ atlas, frame, activity, onContextLost }: {
+  atlas: Atlas; frame: ActivityFrame | null; activity?: Uint8Array | null;
+  onContextLost?: (lost: boolean) => void;
+}) {
   const signal = useRef(frame);
+  const target = useRef<Uint8Array | null>(activity ?? null);
   const orbit = useRef(true);
   const resetView = useRef<(() => void) | null>(null);
   const [orbiting, setOrbiting] = useState(true);
   const repaint = useRef<(() => void) | null>(null);
   useEffect(() => { signal.current = frame; repaint.current?.(); }, [frame]);
+  useEffect(() => { target.current = activity ?? null; }, [activity]);
   const host = useRef<HTMLDivElement>(null);
 
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -30,6 +44,7 @@ export function BrainScene({ atlas, frame }: { atlas: Atlas; frame: ActivityFram
     resetView.current = () => { anatomy.rotation.set(0, 0, 0); fit(); };
     let geometry: THREE.BufferGeometry | undefined;
     let material: THREE.ShaderMaterial | undefined;
+    let activityValues = new Float32Array(0);
     let size = new THREE.Vector3(5, 2, 1);
 
     const fit = () => {
@@ -71,6 +86,7 @@ export function BrainScene({ atlas, frame }: { atlas: Atlas; frame: ActivityFram
       geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(xyz, 3));
       const activity = new Float32Array(bodyIds.length);
+      activityValues = activity;
       geometry.setAttribute("activity", new THREE.BufferAttribute(activity, 1));
       material = new THREE.ShaderMaterial({
         transparent: true, depthWrite: false,
@@ -85,7 +101,7 @@ export function BrainScene({ atlas, frame }: { atlas: Atlas; frame: ActivityFram
           gl_FragColor = vec4(color,(.28+.65*strength)*(1.-smoothstep(.18,.5,r))); }`,
       });
       const paint = () => {
-        if (disposed || !geometry) return;
+        if (disposed || !geometry || target.current) return;
         const values = new Map(signal.current?.values ?? []);
         for (let i = 0; i < bodyIds.length; i++) activity[i] = values.get(bodyIds[i]) ?? 0;
         geometry.getAttribute("activity").needsUpdate = true;
@@ -98,6 +114,14 @@ export function BrainScene({ atlas, frame }: { atlas: Atlas; frame: ActivityFram
       setState("ready");
     };
     void load().catch(() => { if (!disposed) setState("error"); });
+    // A lost context leaves a permanently black canvas unless handled. Three
+    // rebuilds its GL resources on restore; we just have to prevent the default
+    // (which blocks restore) and tell the page.
+    const onLost = (event: Event) => { event.preventDefault(); onContextLost?.(true); };
+    const onRestored = () => { onContextLost?.(false); fit(); repaint.current?.(); };
+    renderer.domElement.addEventListener('webglcontextlost', onLost);
+    renderer.domElement.addEventListener('webglcontextrestored', onRestored);
+
     const observer = new ResizeObserver(fit);
     observer.observe(element);
     fit();
@@ -120,12 +144,26 @@ export function BrainScene({ atlas, frame }: { atlas: Atlas; frame: ActivityFram
     const animate = (now: number) => {
       const dt = Math.min(.05,(now - previous) / 1000); previous = now;
       if (orbit.current && !held && !reducedMotion.matches && !document.hidden) anatomy.rotation.y += dt * .12;
+      const live = target.current;
+      if (live && geometry && live.length === activityValues.length) {
+        // Snap up to a new peak, decay away from it, so each snapshot lands as
+        // a pulse. The fall is shorter than the gap between snapshots so points
+        // visibly drop back rather than sitting at their last value.
+        const rise = 1 - Math.exp(-dt / .03), fall = 1 - Math.exp(-dt / .18);
+        for (let i = 0; i < activityValues.length; i++) {
+          const value = live[i] / 255, current = activityValues[i];
+          activityValues[i] = current + (value - current) * (value > current ? rise : fall);
+        }
+        geometry.getAttribute("activity").needsUpdate = true;
+      }
       if (!document.hidden) renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);
     return () => {
       disposed = true; resetView.current = null; cancelAnimationFrame(frame); repaint.current = null; observer.disconnect();
+      renderer.domElement.removeEventListener('webglcontextlost', onLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', onRestored);
       renderer.domElement.removeEventListener("pointerdown", down); renderer.domElement.removeEventListener("pointermove", move);
       renderer.domElement.removeEventListener("pointerup", up); renderer.domElement.removeEventListener("pointercancel", up);
       geometry?.dispose(); material?.dispose(); renderer.dispose(); renderer.domElement.remove();
