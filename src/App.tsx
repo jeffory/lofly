@@ -134,67 +134,74 @@ export function App() {
               <input type="range" min="1" max="8" step="1" value={c.cycleBars}
                      onChange={e => c.setCycleBars(Number(e.target.value))}/>
             </label>}
-            <label>Kit
-              <select aria-label="Instrument kit" value={c.kitIndex}
-                      onChange={e => c.setKitIndex(Number(e.target.value))}>
-                {c.kits.map((k, i) => <option key={k.name} value={i}>{k.name}</option>)}
-              </select>
-            </label>
+            <div className="pokes">
+              <span className="pokes-title">Poke the fly</span>
+              <div className="poke-row">
+                {c.pokes.map(p => <button key={p.key} className="poke"
+                                          disabled={!c.playing}
+                                          aria-pressed={c.queued === p.key}
+                                          title={p.note}
+                                          onClick={() => c.fire(p.key)}>{p.label}</button>)}
+              </div>
+              <p className="hint">
+                {c.queued
+                  ? `${c.pokes.find(p => p.key === c.queued)?.label} fires on the next bar…`
+                  : c.telemetry?.poke
+                    ? c.pokes.find(p => p.key === c.telemetry!.poke)?.note
+                    : c.playing ? 'A one-shot sensory event, on top of whatever is driving.'
+                                : 'Press Play first.'}
+              </p>
+              <div className="readouts">
+                {c.readouts.map(r => {
+                  const hz = rateOf(r.key);
+                  return <div key={r.key} className="readout" title={r.note}>
+                    <span>{r.label}</span>
+                    <span className="meter"><i style={{ width: `${Math.min(100, hz / 1.2)}%` }}/></span>
+                    <span className="voice-rate">{hz.toFixed(0)} Hz</span>
+                  </div>;
+                })}
+              </div>
+            </div>
+            <div className="sound-row">
+              <label>Kit
+                <select aria-label="Instrument kit" value={c.kitIndex}
+                        onChange={e => c.setKitIndex(Number(e.target.value))}>
+                  {c.kits.map((k, i) => <option key={k.name} value={i}>{k.name}</option>)}
+                </select>
+              </label>
+              <label>Key
+                <select aria-label="Musical key" value={c.moodIndex}
+                        onChange={e => c.setMoodIndex(Number(e.target.value))}>
+                  {c.moods.map((m, i) => <option key={m.key} value={i}>{m.key}</option>)}
+                </select>
+              </label>
+            </div>
             <p className="hint">{c.kits[c.kitIndex]?.blurb}</p>
-            <label>Key
-              <select aria-label="Musical key" value={c.moodIndex}
-                      onChange={e => c.setMoodIndex(Number(e.target.value))}>
-                {c.moods.map((m, i) => <option key={m.key} value={i}>{m.key}</option>)}
-              </select>
-            </label>
-            <label>Drive rate <b>{c.rateHz} Hz</b>
-              <input type="range" min="20" max="300" step="10" value={c.rateHz}
-                     onChange={e => c.setRateHz(Number(e.target.value))}/>
-            </label>
-            <label>Tempo <b>{c.bpm} BPM</b>
-              <input type="range" min="60" max="140" step="2" value={c.bpm}
-                     onChange={e => c.setBpm(Number(e.target.value))}/>
-            </label>
-            <label>Burst length <b>{Math.round(c.duty * 100)}% of bar</b>
-              <input type="range" min="0.1" max="1" step="0.05" value={c.duty}
-                     onChange={e => c.setDuty(Number(e.target.value))}/>
-            </label>
-            <label>Note density <b>{c.intensity.toFixed(2)}×</b>
-              <input type="range" min="0.2" max="2" step="0.05" value={c.intensity}
-                     onChange={e => c.setIntensity(Number(e.target.value))}/>
-            </label>
-            <label>Brain time per bar <b>{c.brainMsPerBar} ms</b>
-              <input type="range" min="60" max="1200" step="20" value={c.brainMsPerBar}
-                     onChange={e => c.setBrainMsPerBar(Number(e.target.value))}/>
-            </label>
-          </div>
-          <div className="pokes">
-            <span className="pokes-title">Poke the fly</span>
-            <div className="poke-row">
-              {c.pokes.map(p => <button key={p.key} className="poke"
-                                        disabled={!c.playing}
-                                        aria-pressed={c.queued === p.key}
-                                        title={p.note}
-                                        onClick={() => c.fire(p.key)}>{p.label}</button>)}
-            </div>
-            <p className="hint">
-              {c.queued
-                ? `${c.pokes.find(p => p.key === c.queued)?.label} fires on the next bar…`
-                : c.telemetry?.poke
-                  ? c.pokes.find(p => p.key === c.telemetry!.poke)?.note
-                  : c.playing ? 'A one-shot sensory event, on top of whatever is driving.'
-                              : 'Press Play first.'}
-            </p>
-            <div className="readouts">
-              {c.readouts.map(r => {
-                const hz = rateOf(r.key);
-                return <div key={r.key} className="readout" title={r.note}>
-                  <span>{r.label}</span>
-                  <span className="meter"><i style={{ width: `${Math.min(100, hz / 1.2)}%` }}/></span>
-                  <span className="voice-rate">{hz.toFixed(0)} Hz</span>
-                </div>;
-              })}
-            </div>
+            {/* The five numeric controls are for tuning, not for playing with,
+                so they stay folded away rather than pushing the pokes off. */}
+            <details className="tuning">
+              <summary>Fine tuning</summary>
+              <label>Drive rate <b>{c.rateHz} Hz</b>
+                <input type="range" min="20" max="300" step="10" value={c.rateHz}
+                       onChange={e => c.setRateHz(Number(e.target.value))}/>
+              </label>
+              <label>Tempo <b>{c.bpm} BPM</b>
+                <input type="range" min="60" max="140" step="2" value={c.bpm}
+                       onChange={e => c.setBpm(Number(e.target.value))}/>
+              </label>
+              <label>Burst length <b>{Math.round(c.duty * 100)}% of bar</b>
+                <input type="range" min="0.1" max="1" step="0.05" value={c.duty}
+                       onChange={e => c.setDuty(Number(e.target.value))}/>
+              </label>
+              <label>Note density <b>{c.intensity.toFixed(2)}×</b>
+                <input type="range" min="0.2" max="2" step="0.05" value={c.intensity}
+                       onChange={e => c.setIntensity(Number(e.target.value))}/>
+              </label>
+              <label>Brain time per bar <b>{c.brainMsPerBar} ms</b>
+                <input type="range" min="60" max="1200" step="20" value={c.brainMsPerBar}
+                       onChange={e => c.setBrainMsPerBar(Number(e.target.value))}/>
+              </label>
+            </details>
           </div>
           <div className="panel-bottom">
             Poisson drive into a named circuit · everything downstream is the connectome
